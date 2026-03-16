@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dot Painting Generator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0a0a; --surface: #141414; --surface2: #1e1e1e;
+    --border: #2a2a2a; --accent: #7f77dd; --accent-light: #a89ef5;
+    --text: #e8e8e8; --text-muted: #888; --text-dim: #555;
+  }
+  html, body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+  .app { max-width: 960px; margin: 0 auto; padding: 32px 20px; display: flex; flex-direction: column; gap: 20px; }
+  .header { display: flex; align-items: baseline; gap: 16px; border-bottom: 0.5px solid var(--border); padding-bottom: 20px; }
+  .header h1 { font-family: 'Space Mono', monospace; font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+  .header span { font-size: 12px; color: var(--text-dim); font-family: 'Space Mono', monospace; }
+  .panel { background: var(--surface); border: 0.5px solid var(--border); border-radius: 14px; padding: 20px; }
+  .panel-title { font-size: 11px; font-weight: 500; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 16px; font-family: 'Space Mono', monospace; }
+  .upload-area { border: 1.5px dashed var(--border); border-radius: 10px; padding: 36px 20px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; background: var(--bg); }
+  .upload-area:hover { border-color: var(--accent); }
+  .upload-area.drag { border-color: var(--accent); background: rgba(127,119,221,0.05); }
+  .upload-icon { width: 40px; height: 40px; border: 1.5px solid var(--border); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; font-size: 18px; color: var(--text-muted); }
+  .upload-text { font-size: 14px; color: var(--text-muted); }
+  .upload-sub { font-size: 11px; color: var(--text-dim); margin-top: 4px; font-family: 'Space Mono', monospace; }
+  input[type=file] { display: none; }
+
+  .palette-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 8px;
+    margin-top: 16px;
+  }
+  .palette-swatch {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .swatch-dot {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    border: 1px solid #333;
+  }
+  .swatch-code {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+  }
+  .swatch-name {
+    font-size: 9px;
+    color: var(--text-dim);
+    text-align: center;
+    line-height: 1.2;
+  }
+
+  .actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; align-items: center; }
+  .btn { font-family: 'Space Mono', monospace; font-size: 12px; padding: 10px 22px; border-radius: 8px; cursor: pointer; font-weight: 700; letter-spacing: 0.3px; transition: all 0.15s; border: none; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-light); }
+  .btn-primary:disabled { background: var(--surface2); color: var(--text-dim); cursor: not-allowed; }
+  .btn-ghost { background: transparent; color: var(--text-muted); border: 0.5px solid var(--border); }
+  .btn-ghost:hover { border-color: var(--text-muted); color: var(--text); }
+  .btn-ghost:disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+  .status { font-size: 11px; color: var(--text-dim); margin-top: 10px; min-height: 16px; font-family: 'Space Mono', monospace; }
+  .progress-bar { height: 2px; background: var(--border); border-radius: 1px; margin-top: 10px; overflow: hidden; display: none; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 1px; width: 0%; transition: width 0.15s; }
+  .output-panel { display: none; }
+  .tabs { display: flex; gap: 2px; margin-bottom: 16px; background: var(--bg); border-radius: 10px; padding: 3px; border: 0.5px solid var(--border); width: fit-content; }
+  .tab { font-family: 'Space Mono', monospace; font-size: 11px; padding: 6px 16px; border-radius: 8px; cursor: pointer; border: none; background: transparent; color: var(--text-dim); transition: all 0.15s; letter-spacing: 0.3px; }
+  .tab.active { background: var(--accent); color: #fff; }
+  .canvas-wrap { background: #000; border-radius: 10px; border: 0.5px solid var(--border); width: 100%; }
+  .canvas-wrap canvas { display: block; width: 100% !important; height: auto !important; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .legend-item { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--text-muted); font-family: 'Space Mono', monospace; }
+  .legend-dot { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; border: 1px solid #333; }
+  .preview-thumb { margin-top: 12px; display: none; width: 80px; height: 60px; object-fit: cover; border-radius: 6px; border: 0.5px solid var(--border); }
+  .info-row { display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap; }
+  .info-tag { font-size: 11px; font-family: 'Space Mono', monospace; color: var(--text-dim); background: var(--bg); border: 0.5px solid var(--border); border-radius: 6px; padding: 4px 10px; }
+  .info-tag em { color: var(--accent-light); font-style: normal; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1>dot painting</h1>
+    <span>// A4 · sabit palet</span>
+  </div>
+
+  <!-- Palette display -->
+  <div class="panel">
+    <div class="panel-title">// sabit renk paleti</div>
+    <div class="palette-grid" id="paletteGrid"></div>
+  </div>
+
+  <!-- Upload -->
+  <div class="panel">
+    <div class="panel-title">// görsel yükle</div>
+    <div class="upload-area" id="dropZone">
+      <div class="upload-icon">↑</div>
+      <div class="upload-text" id="uploadText">Görsel yükle veya sürükle bırak</div>
+      <div class="upload-sub">PNG · JPG · WEBP</div>
+      <input type="file" id="fileInput" accept="image/*">
+    </div>
+    <img id="previewThumb" class="preview-thumb" alt="preview">
+
+    <div class="info-row">
+      <span class="info-tag">A4 <em>210×297mm</em></span>
+      <span class="info-tag">grid <em>41×58</em> + <em>2</em> dot kenar</span>
+      <span class="info-tag">nokta <em>31px</em> + 1px</span>
+      <span class="info-tag">çıktı <em>1442×1986</em>px</span>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="generateBtn" disabled>oluştur</button>
+      <button class="btn btn-ghost" id="downloadNumbered" disabled>boyama indir</button>
+      <button class="btn btn-ghost" id="downloadColored" disabled>renkli indir</button>
+    </div>
+    <div class="progress-bar" id="progressBar"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="status" id="status">görsel yükleyin.</div>
+  </div>
+
+  <!-- Output -->
+  <div class="panel output-panel" id="outputPanel">
+    <div class="panel-title">// çıktı</div>
+    <div class="tabs">
+      <button class="tab active" id="tabNumbered">boyama sayfası</button>
+      <button class="tab" id="tabColored">renk önizleme</button>
+    </div>
+    <div class="canvas-wrap">
+      <canvas id="mainCanvas"></canvas>
+    </div>
+    <div class="legend" id="legend"></div>
+  </div>
+</div>
+
+<script>
+// ── Fixed Palette ─────────────────────────────────────────────────
+// Format: { code, name, rgb }
+const PALETTE = [
+  { code: 'K',  name: 'Siyah',        rgb: [17,  17,  17 ] },
+  { code: 'B',  name: 'Beyaz',        rgb: [245, 245, 245] },
+  { code: 'R',  name: 'Kırmızı',      rgb: [212, 43,  43 ] },
+  { code: 'T',  name: 'Turuncu',      rgb: [232, 114, 26 ] },
+  { code: 'S',  name: 'Sarı',         rgb: [242, 192, 18 ] },
+  { code: 'Y',  name: 'Yeşil',        rgb: [42,  158, 79 ] },
+  { code: 'M',  name: 'Mavi',         rgb: [26,  91,  191] },
+  { code: 'P',  name: 'Mor',          rgb: [123, 53,  184] },
+  { code: '1',  name: 'Pembe',        rgb: [240, 96,  160] },
+  { code: '2',  name: 'Kahverengi',   rgb: [123, 64,  32 ] },
+  { code: '3',  name: 'Ten',          rgb: [240, 168, 104] },
+  { code: '4',  name: 'Limon yeşili', rgb: [144, 208, 48 ] },
+  { code: '5',  name: 'Koyu yeşil',   rgb: [20,  82,  20 ] },
+  { code: '6',  name: 'Camgöbeği',    rgb: [0,   184, 192] },
+  { code: '7',  name: 'Lacivert',     rgb: [16,  32,  112] },
+  { code: '8',  name: 'Gri',          rgb: [136, 136, 136] },
+];
+
+// ── Constants ─────────────────────────────────────────────────────
+const DOT          = 31;
+const GAP          = 1;
+const CELL         = DOT + GAP;  // 32 — canvas boyutu aynı kalıyor
+const BORDER_DOTS  = 2;
+const COLS_INNER   = 41;
+const ROWS_INNER   = 58;
+const COLS_TOTAL   = COLS_INNER + BORDER_DOTS * 2;
+const ROWS_TOTAL   = ROWS_INNER + BORDER_DOTS * 2;
+const CANVAS_W     = COLS_TOTAL * CELL + GAP;
+const CANVAS_H     = ROWS_TOTAL * CELL + GAP;
+
+let uploadedImage = null, pixelGrid = [], currentMode = 'numbered';
+
+// ── Build palette display ─────────────────────────────────────────
+function buildPaletteUI() {
+  const grid = document.getElementById('paletteGrid');
+  PALETTE.forEach(({ code, name, rgb }) => {
+    const hex = rgbToHex(...rgb);
+    const lum = 0.299*rgb[0] + 0.587*rgb[1] + 0.114*rgb[2];
+    const textColor = lum > 160 ? '#111' : '#eee';
+    const el = document.createElement('div');
+    el.className = 'palette-swatch';
+    el.innerHTML =
+      '<div class="swatch-dot" style="background:' + hex + ';position:relative;">' +
+        '<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:Space Mono,monospace;font-size:11px;font-weight:700;color:' + textColor + ';">' + code + '</span>' +
+      '</div>' +
+      '<span class="swatch-name">' + name + '</span>';
+    grid.appendChild(el);
+  });
+}
+buildPaletteUI();
+
+// ── DOM refs ──────────────────────────────────────────────────────
+const dropZone     = document.getElementById('dropZone');
+const fileInput    = document.getElementById('fileInput');
+const generateBtn  = document.getElementById('generateBtn');
+const dlNumbered   = document.getElementById('downloadNumbered');
+const dlColored    = document.getElementById('downloadColored');
+const mainCanvas   = document.getElementById('mainCanvas');
+const ctx          = mainCanvas.getContext('2d');
+const statusEl     = document.getElementById('status');
+const outputPanel  = document.getElementById('outputPanel');
+const previewThumb = document.getElementById('previewThumb');
+const progressBar  = document.getElementById('progressBar');
+const progressFill = document.getElementById('progressFill');
+
+dropZone.onclick     = () => fileInput.click();
+dropZone.ondragover  = (e) => { e.preventDefault(); dropZone.classList.add('drag'); };
+dropZone.ondragleave = () => dropZone.classList.remove('drag');
+dropZone.ondrop      = (e) => { e.preventDefault(); dropZone.classList.remove('drag'); loadFile(e.dataTransfer.files[0]); };
+fileInput.onchange   = (e) => loadFile(e.target.files[0]);
+document.getElementById('tabNumbered').onclick = () => setTab('numbered');
+document.getElementById('tabColored').onclick  = () => setTab('colored');
+
+function setTab(mode) {
+  currentMode = mode;
+  document.getElementById('tabNumbered').className = 'tab' + (mode === 'numbered' ? ' active' : '');
+  document.getElementById('tabColored').className  = 'tab' + (mode === 'colored'  ? ' active' : '');
+  if (pixelGrid.length) renderCanvas(mode);
+}
+
+function loadFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      uploadedImage = img;
+      generateBtn.disabled = false;
+      statusEl.textContent = 'yüklendi: ' + img.width + '×' + img.height + 'px';
+      document.getElementById('uploadText').textContent = file.name;
+      previewThumb.src = e.target.result;
+      previewThumb.style.display = 'block';
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+generateBtn.onclick = () => {
+  if (!uploadedImage) return;
+  generateBtn.disabled = true;
+  dlNumbered.disabled = true;
+  dlColored.disabled = true;
+  statusEl.textContent = 'işleniyor...';
+  progressBar.style.display = 'block';
+  progressFill.style.width = '10%';
+  setTimeout(processImage, 60);
+};
+
+// ── Process ───────────────────────────────────────────────────────
+function processImage() {
+  // Center-crop to A4 ratio
+  const targetRatio = COLS_INNER / ROWS_INNER;
+  const srcRatio    = uploadedImage.width / uploadedImage.height;
+  let sx, sy, sw, sh;
+  if (srcRatio > targetRatio) {
+    sh = uploadedImage.height; sw = Math.round(sh * targetRatio);
+    sy = 0; sx = Math.round((uploadedImage.width - sw) / 2);
+  } else {
+    sw = uploadedImage.width; sh = Math.round(sw / targetRatio);
+    sx = 0; sy = Math.round((uploadedImage.height - sh) / 2);
+  }
+
+  progressFill.style.width = '25%';
+
+  // Downsample to grid size with contrast enhancement
+  const off = document.createElement('canvas');
+  off.width = COLS_INNER; off.height = ROWS_INNER;
+  const offCtx = off.getContext('2d');
+  offCtx.drawImage(uploadedImage, sx, sy, sw, sh, 0, 0, COLS_INNER, ROWS_INNER);
+  const imgData = offCtx.getImageData(0, 0, COLS_INNER, ROWS_INNER);
+  enhanceContrast(imgData, 1.35, 1.2);
+  offCtx.putImageData(imgData, 0, 0);
+  const d = offCtx.getImageData(0, 0, COLS_INNER, ROWS_INNER).data;
+
+  progressFill.style.width = '60%';
+
+  // Map every pixel to nearest palette color
+  pixelGrid = [];
+  for (let r = 0; r < ROWS_INNER; r++) {
+    const row = [];
+    for (let c = 0; c < COLS_INNER; c++) {
+      const i = (r * COLS_INNER + c) * 4;
+      row.push(nearestPaletteIndex([d[i], d[i+1], d[i+2]]));
+    }
+    pixelGrid.push(row);
+  }
+
+  progressFill.style.width = '88%';
+  outputPanel.style.display = 'block';
+  renderCanvas('numbered');
+  currentMode = 'numbered';
+  document.getElementById('tabNumbered').className = 'tab active';
+  document.getElementById('tabColored').className  = 'tab';
+  renderUILegend();
+  dlNumbered.disabled = false;
+  dlColored.disabled  = false;
+  generateBtn.disabled = false;
+  progressFill.style.width = '100%';
+  setTimeout(() => { progressBar.style.display = 'none'; progressFill.style.width = '0%'; }, 400);
+
+  // Count which palette entries are actually used
+  const used = new Set(pixelGrid.flat());
+  statusEl.textContent = 'tamamlandı — ' + used.size + ' renk kullanıldı · ' + CANVAS_W + '×' + CANVAS_H + 'px';
+}
+
+// ── Contrast + Saturation Enhancement ────────────────────────────
+function enhanceContrast(imageData, contrastFactor, satFactor) {
+  const data = imageData.data;
+  let minL = 255, maxL = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    const l = 0.299*data[i] + 0.587*data[i+1] + 0.114*data[i+2];
+    if (l < minL) minL = l;
+    if (l > maxL) maxL = l;
+  }
+  const range = Math.max(1, maxL - minL);
+  for (let i = 0; i < data.length; i += 4) {
+    let r = Math.round((data[i]   - minL) / range * 255);
+    let g = Math.round((data[i+1] - minL) / range * 255);
+    let b = Math.round((data[i+2] - minL) / range * 255);
+    r = clamp(Math.round(128 + (r - 128) * contrastFactor));
+    g = clamp(Math.round(128 + (g - 128) * contrastFactor));
+    b = clamp(Math.round(128 + (b - 128) * contrastFactor));
+    const avg = (r + g + b) / 3;
+    data[i]   = clamp(Math.round(avg + (r - avg) * satFactor));
+    data[i+1] = clamp(Math.round(avg + (g - avg) * satFactor));
+    data[i+2] = clamp(Math.round(avg + (b - avg) * satFactor));
+  }
+}
+
+function clamp(v) { return Math.max(0, Math.min(255, v)); }
+
+// ── Palette matching ───────────────────────────────────────────────
+function nearestPaletteIndex(px) {
+  let best = Infinity, idx = 0;
+  for (let i = 0; i < PALETTE.length; i++) {
+    const d = colorDist(px, PALETTE[i].rgb);
+    if (d < best) { best = d; idx = i; }
+  }
+  return idx;
+}
+
+function colorDist(a, b) {
+  const dr = a[0]-b[0], dg = a[1]-b[1], db = a[2]-b[2];
+  return 2*dr*dr + 4*dg*dg + 3*db*db;
+}
+
+function rgbToHex(r, g, b) {
+  return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
+}
+
+// ── Render ────────────────────────────────────────────────────────
+function renderCanvas(mode) {
+  mainCanvas.width  = CANVAS_W;
+  mainCanvas.height = CANVAS_H;
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+  const radius = DOT / 2;
+
+  for (let r = 0; r < ROWS_INNER; r++) {
+    for (let c = 0; c < COLS_INNER; c++) {
+      const pi           = pixelGrid[r][c];
+      const { code, rgb } = PALETTE[pi];
+      const x = (c + BORDER_DOTS) * CELL + GAP + radius;
+      const y = (r + BORDER_DOTS) * CELL + GAP + radius;
+
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+
+      if (mode === 'colored') {
+        ctx.fillStyle = rgbToHex(...rgb);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.strokeStyle = '#cccccc';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+        ctx.fillStyle = '#000000';
+        ctx.font = 'bold 11px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(code, x, y);
+      }
+    }
+  }
+}
+
+// ── UI Legend — show only used colors ─────────────────────────────
+function renderUILegend() {
+  const legend = document.getElementById('legend');
+  legend.innerHTML = '';
+  const used = new Set(pixelGrid.flat());
+  PALETTE.forEach(({ code, name, rgb }, i) => {
+    if (!used.has(i)) return;
+    const lum = 0.299*rgb[0] + 0.587*rgb[1] + 0.114*rgb[2];
+    const tc  = lum > 160 ? '#111' : '#eee';
+    const hex = rgbToHex(...rgb);
+    const el  = document.createElement('div');
+    el.className = 'legend-item';
+    el.innerHTML =
+      '<div class="legend-dot" style="background:'+hex+';color:'+tc+';">'+code+'</div>' +
+      '<span>'+name+'</span>';
+    legend.appendChild(el);
+  });
+}
+
+// ── Download ──────────────────────────────────────────────────────
+function downloadCanvas(filename, mode) {
+  renderCanvas(mode);
+  mainCanvas.toBlob(function(blob) {
+    if (!blob) { alert('İndirme başarısız.'); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }, 'image/png');
+}
+
+dlNumbered.onclick = () => downloadCanvas('dot-painting-boyama.png', 'numbered');
+dlColored.onclick  = () => downloadCanvas('dot-painting-renkli.png',  'colored');
+</script>
+</body>
+</html>
