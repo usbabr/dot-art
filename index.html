@@ -111,8 +111,19 @@
     <div class="info-row">
       <span class="info-tag">A4 <em>210×297mm</em></span>
       <span class="info-tag">grid <em>41×58</em> + <em>2</em> dot kenar</span>
-      <span class="info-tag">nokta <em>31px</em> + 1px</span>
+      <span class="info-tag">nokta <em>30px</em> + 0.8px</span>
+      <span class="info-tag">renk <em>18</em> + beyaz boş</span>
       <span class="info-tag">çıktı <em>1442×1986</em>px</span>
+    </div>
+
+    <div style="margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <label style="font-size:11px;color:var(--text-dim);font-family:'Space Mono',monospace;letter-spacing:0.5px;">// nokta şekli</label>
+      <select id="shapeSelect" style="background:var(--bg);color:var(--text);border:0.5px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;font-family:'Space Mono',monospace;outline:none;cursor:pointer;">
+        <option value="circle">● Daire</option>
+        <option value="roundedsquare">▣ Yuvarlatılmış kare</option>
+        <option value="hexagon">⬡ Altıgen</option>
+        <option value="diamond">◆ Elmas</option>
+      </select>
     </div>
 
     <div class="actions">
@@ -143,7 +154,6 @@
 // Format: { code, name, rgb }
 const PALETTE = [
   { code: 'K',  name: 'Siyah',        rgb: [17,  17,  17 ] },
-  { code: 'B',  name: 'Beyaz',        rgb: [245, 245, 245] },
   { code: 'R',  name: 'Kırmızı',      rgb: [212, 43,  43 ] },
   { code: 'T',  name: 'Turuncu',      rgb: [232, 114, 26 ] },
   { code: 'S',  name: 'Sarı',         rgb: [242, 192, 18 ] },
@@ -158,12 +168,15 @@ const PALETTE = [
   { code: '6',  name: 'Camgöbeği',    rgb: [0,   184, 192] },
   { code: '7',  name: 'Lacivert',     rgb: [16,  32,  112] },
   { code: '8',  name: 'Gri',          rgb: [136, 136, 136] },
+  { code: '9',  name: 'Koyu gri',     rgb: [68,  68,  68 ] },
+  { code: '0',  name: 'Açık mavi',    rgb: [96,  176, 240] },
+  { code: 'A',  name: 'Koyu kahve',   rgb: [90,  46,  16 ] },
 ];
 
 // ── Constants ─────────────────────────────────────────────────────
-const DOT          = 31;
-const GAP          = 1;
-const CELL         = DOT + GAP;  // 32 — canvas boyutu aynı kalıyor
+const DOT          = 30;
+const GAP          = 0.8;
+const CELL         = DOT + GAP;  // 30.8px per cell
 const BORDER_DOTS  = 2;
 const COLS_INNER   = 41;
 const ROWS_INNER   = 58;
@@ -214,6 +227,7 @@ dropZone.ondrop      = (e) => { e.preventDefault(); dropZone.classList.remove('d
 fileInput.onchange   = (e) => loadFile(e.target.files[0]);
 document.getElementById('tabNumbered').onclick = () => setTab('numbered');
 document.getElementById('tabColored').onclick  = () => setTab('colored');
+document.getElementById('shapeSelect').onchange = () => { if (pixelGrid.length) renderCanvas(currentMode); };
 
 function setTab(mode) {
   currentMode = mode;
@@ -285,7 +299,14 @@ function processImage() {
     const row = [];
     for (let c = 0; c < COLS_INNER; c++) {
       const i = (r * COLS_INNER + c) * 4;
-      row.push(nearestPaletteIndex([d[i], d[i+1], d[i+2]]));
+      const pr = d[i], pg = d[i+1], pb = d[i+2];
+      // If pixel is near-white, mark as -1 (empty — not painted)
+      const lum = 0.299*pr + 0.587*pg + 0.114*pb;
+      if (lum > 220) {
+        row.push(-1);
+      } else {
+        row.push(nearestPaletteIndex([pr, pg, pb]));
+      }
     }
     pixelGrid.push(row);
   }
@@ -304,7 +325,7 @@ function processImage() {
   setTimeout(() => { progressBar.style.display = 'none'; progressFill.style.width = '0%'; }, 400);
 
   // Count which palette entries are actually used
-  const used = new Set(pixelGrid.flat());
+  const used = new Set(pixelGrid.flat().filter(v => v !== -1));
   statusEl.textContent = 'tamamlandı — ' + used.size + ' renk kullanıldı · ' + CANVAS_W + '×' + CANVAS_H + 'px';
 }
 
@@ -354,38 +375,89 @@ function rgbToHex(r, g, b) {
 }
 
 // ── Render ────────────────────────────────────────────────────────
+function getShape() {
+  return document.getElementById('shapeSelect').value;
+}
+
+function drawShape(x, y, size, shape) {
+  const r = size / 2;
+  ctx.beginPath();
+  if (shape === 'circle') {
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+  } else if (shape === 'roundedsquare') {
+    const s = size * 0.92;
+    const rx = s * 0.28;
+    const lx = x - s/2, ly = y - s/2;
+    ctx.moveTo(lx + rx, ly);
+    ctx.lineTo(lx + s - rx, ly);
+    ctx.quadraticCurveTo(lx + s, ly, lx + s, ly + rx);
+    ctx.lineTo(lx + s, ly + s - rx);
+    ctx.quadraticCurveTo(lx + s, ly + s, lx + s - rx, ly + s);
+    ctx.lineTo(lx + rx, ly + s);
+    ctx.quadraticCurveTo(lx, ly + s, lx, ly + s - rx);
+    ctx.lineTo(lx, ly + rx);
+    ctx.quadraticCurveTo(lx, ly, lx + rx, ly);
+    ctx.closePath();
+  } else if (shape === 'hexagon') {
+    const hr = r * 0.97;
+    for (let i = 0; i < 6; i++) {
+      const angle = Math.PI / 180 * (60 * i - 30);
+      const hx = x + hr * Math.cos(angle);
+      const hy = y + hr * Math.sin(angle);
+      i === 0 ? ctx.moveTo(hx, hy) : ctx.lineTo(hx, hy);
+    }
+    ctx.closePath();
+  } else if (shape === 'diamond') {
+    const dr = r * 0.95;
+    ctx.moveTo(x,      y - dr);
+    ctx.lineTo(x + dr, y);
+    ctx.lineTo(x,      y + dr);
+    ctx.lineTo(x - dr, y);
+    ctx.closePath();
+  }
+}
+
 function renderCanvas(mode) {
   mainCanvas.width  = CANVAS_W;
   mainCanvas.height = CANVAS_H;
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
-  const radius = DOT / 2;
+  const shape = getShape();
 
   for (let r = 0; r < ROWS_INNER; r++) {
     for (let c = 0; c < COLS_INNER; c++) {
-      const pi           = pixelGrid[r][c];
-      const { code, rgb } = PALETTE[pi];
-      const x = (c + BORDER_DOTS) * CELL + GAP + radius;
-      const y = (r + BORDER_DOTS) * CELL + GAP + radius;
-
-      ctx.beginPath();
-      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      const pi = pixelGrid[r][c];
+      const { code, rgb } = pi === -1 ? { code: null, rgb: null } : PALETTE[pi];
+      const x = (c + BORDER_DOTS) * CELL + GAP + (DOT / 2);
+      const y = (r + BORDER_DOTS) * CELL + GAP + (DOT / 2);
 
       if (mode === 'colored') {
-        ctx.fillStyle = rgbToHex(...rgb);
-        ctx.fill();
+        // White area: draw empty dark circle
+        drawShape(x, y, DOT, shape);
+        if (pi === -1) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+        } else {
+          ctx.fillStyle = rgbToHex(...rgb);
+          ctx.fill();
+        }
       } else {
+        // Numbered mode: always draw circle
+        drawShape(x, y, DOT, shape);
         ctx.fillStyle = '#ffffff';
         ctx.fill();
         ctx.strokeStyle = '#cccccc';
         ctx.lineWidth = 0.5;
         ctx.stroke();
-        ctx.fillStyle = '#000000';
-        ctx.font = 'bold 11px Arial, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(code, x, y);
+        // Only draw code if not white
+        if (pi !== -1) {
+          ctx.fillStyle = '#000000';
+          ctx.font = 'bold 11px Arial, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(code, x, y);
+        }
       }
     }
   }
@@ -395,7 +467,7 @@ function renderCanvas(mode) {
 function renderUILegend() {
   const legend = document.getElementById('legend');
   legend.innerHTML = '';
-  const used = new Set(pixelGrid.flat());
+  const used = new Set(pixelGrid.flat().filter(v => v !== -1));
   PALETTE.forEach(({ code, name, rgb }, i) => {
     if (!used.has(i)) return;
     const lum = 0.299*rgb[0] + 0.587*rgb[1] + 0.114*rgb[2];
