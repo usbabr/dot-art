@@ -121,8 +121,7 @@
       <select id="shapeSelect" style="background:var(--bg);color:var(--text);border:0.5px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;font-family:'Space Mono',monospace;outline:none;cursor:pointer;">
         <option value="circle">● Daire</option>
         <option value="roundedsquare">▣ Yuvarlatılmış kare</option>
-        <option value="hexagon">⬡ Altıgen</option>
-        <option value="diamond">◆ Elmas</option>
+        <option value="square">■ Kare</option>
       </select>
     </div>
 
@@ -169,13 +168,11 @@ const PALETTE = [
   { code: '7',  name: 'Lacivert',     rgb: [16,  32,  112] },
   { code: '8',  name: 'Gri',          rgb: [136, 136, 136] },
   { code: '9',  name: 'Koyu gri',     rgb: [68,  68,  68 ] },
-  { code: '0',  name: 'Açık mavi',    rgb: [96,  176, 240] },
-  { code: 'A',  name: 'Koyu kahve',   rgb: [90,  46,  16 ] },
 ];
 
 // ── Constants ─────────────────────────────────────────────────────
 const DOT          = 30;
-const GAP          = 0.8;
+const GAP          = 1;
 const CELL         = DOT + GAP;  // 30.8px per cell
 const BORDER_DOTS  = 2;
 const COLS_INNER   = 41;
@@ -398,22 +395,9 @@ function drawShape(x, y, size, shape) {
     ctx.lineTo(lx, ly + rx);
     ctx.quadraticCurveTo(lx, ly, lx + rx, ly);
     ctx.closePath();
-  } else if (shape === 'hexagon') {
-    const hr = r * 0.97;
-    for (let i = 0; i < 6; i++) {
-      const angle = Math.PI / 180 * (60 * i - 30);
-      const hx = x + hr * Math.cos(angle);
-      const hy = y + hr * Math.sin(angle);
-      i === 0 ? ctx.moveTo(hx, hy) : ctx.lineTo(hx, hy);
-    }
-    ctx.closePath();
-  } else if (shape === 'diamond') {
-    const dr = r * 0.95;
-    ctx.moveTo(x,      y - dr);
-    ctx.lineTo(x + dr, y);
-    ctx.lineTo(x,      y + dr);
-    ctx.lineTo(x - dr, y);
-    ctx.closePath();
+  } else if (shape === 'square') {
+    const s = size * 0.95;
+    ctx.rect(x - s/2, y - s/2, s, s);
   }
 }
 
